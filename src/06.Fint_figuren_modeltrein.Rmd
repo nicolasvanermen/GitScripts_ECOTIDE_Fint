@@ -1,0 +1,1305 @@
+---
+title: "Fint figuren C-alternatieven"
+author: "Joost Vanoverbeke"
+date: "22 juli 2021"
+output:
+  html_document: default
+  word_document:
+    fig_height: 4
+    fig_width: 7
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, autodep = TRUE, cache.extra = R.version)
+# showtext::showtext_opts(dpi = 300)
+
+```
+
+
+```{r libraries, cache=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(janitor)
+# library(gplots)
+library(INBOtheme)
+library(RColorBrewer)
+conflicted::conflicts_prefer(dplyr::filter)
+
+options(stringsAsFactors = FALSE)
+
+source("../../../../Basis/src/afstanden_updated.R")
+
+```
+
+
+```{r alternatieven en scenarios}
+
+# alternatives <-
+# c("2050REF_C", "2050C1", "2050C2", "2050C3")
+# alternatives <-
+#   c("2050REF_C")
+Alternatives <-
+  c("REF", "C1", "C3")
+# alternatives <-
+#   c("2050C2")
+# alternatives <-
+#   c("2050C3")
+
+# scenarios <-
+# c("A0CN", "AminCL", "AplusCH")
+Scenarios <-
+  c("A0CN")
+# scenarios <-
+#   c("AplusCH")
+
+
+# nevengeul <- ""
+# nevengeul <- "_zonderNG"
+
+```
+
+
+```{r locaties}
+
+figuren <- "../../Output/figuren/"
+figuren_larvaal <- str_c(figuren, "larvaal/")
+figuren_larvaal_SI <- str_c(figuren_larvaal, "SI/")
+figuren_larvaal_delta_SI <- str_c(figuren_larvaal, "delta_SI/")
+figuren_adult <- str_c(figuren, "adult/")
+figuren_adult_SI <- str_c(figuren_adult, "SI/")
+figuren_adult_delta_SI <- str_c(figuren_adult, "delta_SI/")
+
+```
+
+
+```{r ophalen gegevens}
+
+Data_larvaal <- NULL
+for(scen in Scenarios) {
+  for(alt in Alternatives) {
+    cat(str_c("scenario = ", scen, ";  alternatief = ", alt, "\nl"))
+    # ng <- ifelse(alt == "2050REF_C", "", nevengeul)
+    file_name <- 
+      str_c("../../Output/resultaten_fint_", alt, "_", scen, "_larvaal.csv")
+    Data_larvaal <-
+      Data_larvaal %>% 
+      bind_rows(read_delim(file_name, 
+                           delim = ";", 
+                           escape_double = FALSE, 
+                           trim_ws = TRUE) %>% 
+                  mutate(alternative = alt,
+                         scenario = scen))
+  }
+}
+
+
+Data_larvaal %<>% 
+  mutate(jaar = case_when(jaar == 2009 ~ 2046,
+                          jaar == 2010 ~ 2047,
+                          jaar == 2011 ~ 2048,
+                          jaar == 2012 ~ 2049,
+                          jaar == 2013 ~ 2050,
+                          TRUE ~ jaar),
+         afst_int = as.integer(floor(afst))) %>% 
+  group_by(afst_int) %>% 
+  mutate(OMES = min(OMES)) %>% 
+  ungroup() %>% 
+  select(OMES,jaar,alternative,scenario,afst,afst_int,x,y,everything()) %>% 
+  mutate(alternative = factor(alternative, levels = Alternatives),
+         scenario = factor(scenario, levels = Scenarios))
+
+
+
+Data_adult <- NULL
+for(scen in Scenarios) {
+  for(alt in Alternatives) {
+    cat(str_c("scenario = ", scen, ";  alternatief = ", alt, "\nl"))
+    # ng <- ifelse(alt == "2050REF_C", "", nevengeul)
+    file_name <-
+      str_c("../../Output/resultaten_fint_", alt, "_", scen, "_adult_1D.csv")
+    Data_adult <-
+      Data_adult %>% 
+      bind_rows(read_delim(file_name, 
+                           delim = ";", 
+                           escape_double = FALSE, 
+                           trim_ws = TRUE) %>% 
+                  mutate(alternative = alt,
+                         scenario = scen))
+  }
+}
+
+Data_adult %<>% 
+  mutate(jaar = case_when(jaar == 2009 ~ 2046,
+                          jaar == 2010 ~ 2047,
+                          jaar == 2011 ~ 2048,
+                          jaar == 2012 ~ 2049,
+                          jaar == 2013 ~ 2050,
+                          TRUE ~ jaar),
+         afst_int = as.integer(floor(afst))) %>% 
+  group_by(afst_int) %>% 
+  mutate(OMES = min(OMES)) %>% 
+  ungroup() %>% 
+  select(OMES,jaar,alternative,scenario,afst,afst_int,x,y,everything()) %>% 
+  mutate(alternative = factor(alternative, levels = Alternatives),
+         scenario = factor(scenario, levels = Scenarios))
+
+```
+
+
+```{r variabelen}
+
+vars.group <- c("alternative","scenario","OMES","jaar")
+
+vars.env.larvaal <- c("oxy","sal","SPM","zoopl","depth","vel")
+nams.env.larvaal <- c("Oxygen (mg/l)","Salinity (ppm)","SPM (mg/l)","Zooplankton (mgC/l)","Water depth (m)","Water velocity (m/s)")
+
+vars.env.adult <- c("oxy","sal","depth","vel")
+nams.env.adult <- c("Oxygen (mg/l)","Salinity (ppm)","Water depth (m)", "Water velocity (m/s)")
+
+vars.score.larvaal <- c("SI", str_c("SI_", vars.env.larvaal))
+nams.score.larvaal <- c("All","Only oxygen","Only salinity","Only SPM","Only zooplankton","Only water depth","Only water velocity")
+
+vars.score.adult <- c("SI", str_c("SI_", vars.env.adult))
+nams.score.adult <- c("All","Only oxygen","Only salinity","Only water depth","Only water velocity")
+
+```
+
+
+```{r data environment per km}
+
+Data_larvaal_env <- 
+  Data_larvaal %>% 
+  select(all_of(vars.group), afst, all_of(vars.env.larvaal)) %>% 
+  group_by_at(c(all_of(vars.group), "afst")) %>% 
+  summarise_all(mean, na.rm = TRUE) %>% 
+  ungroup() %>% 
+  mutate(afst = as.integer(floor(afst))) %>% 
+  group_by_at(c(all_of(vars.group), "afst")) %>%
+  summarise_all(mean, na.rm = TRUE) %>% 
+  ungroup() %>% 
+  mutate(OMES = ordered(OMES),
+         jaar = ordered(jaar)) %>% 
+  rename_at(vars.env.larvaal, ~ nams.env.larvaal)
+
+Data_larvaal_long_env <- 
+  Data_larvaal_env %>% 
+  gather(key="Variable", value="Value",
+         all_of(nams.env.larvaal)) %>% 
+  mutate(Variable = factor(Variable, levels = nams.env.larvaal))
+
+
+Data_adult_env <- 
+  Data_adult %>% 
+  select(all_of(vars.group), afst, all_of(vars.env.adult)) %>% 
+  mutate(afst = as.integer(floor(afst))) %>% 
+  group_by_at(c(all_of(vars.group), "afst")) %>%
+  summarise_all(mean, na.rm = TRUE) %>% 
+  ungroup() %>% 
+  mutate(OMES = ordered(OMES),
+         jaar = ordered(jaar)) %>% 
+  rename_at(vars.env.adult, ~ nams.env.adult)
+
+Data_adult_long_env <- Data_adult_env %>% 
+  gather(key="Variable", value="Value",
+         all_of(nams.env.adult)) %>% 
+  mutate(Variable = factor(Variable, levels = nams.env.adult))
+
+```
+
+
+```{r figuren omgevingsvariabelen larvaal, fig.height=4, fig.width=10}
+
+vars_env_noYear <- c("Water depth (m)","Water velocity (m/s)")
+vars_env_year <- setdiff(nams.env.larvaal, vars_env_noYear)
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+plot_func <- function (dat) {
+  max_val <- max(dat$max_value, na.rm = TRUE)
+  min_val <- min(dat$min_value, na.rm = TRUE)
+  var <- unique(dat$Variable)
+  ggplot(dat, aes(afst, mean_value)) +
+       geom_line(aes(color=alternative), size=0.7) +
+       geom_line(aes(y = min_value, color=alternative), linetype=2, size=0.5) +
+       geom_line(aes(y = max_value, color=alternative), linetype=2, size=0.5) +
+       # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+       # scale_linetype_manual(values = c(3,2,1,1,1)) +
+       geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), 
+                 size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+       geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+       xlab("Distance from Vlissingen (km)") +
+       ylab(var) +
+       facet_wrap(~ scenario) +
+       theme_bw() + 
+       theme(strip.text = element_text(size = txts),
+             text = element_text(size = txts))
+}
+
+plots <- 
+  Data_larvaal_long_env %>%
+  filter(#scenario == "AplusCH",
+         Variable %in% vars_env_year) %>% 
+  group_by(alternative, scenario, OMES, afst, Variable) %>% 
+  summarize(mean_value = mean(Value, na.rm = TRUE),
+            min_value = min(Value, na.rm = TRUE),
+            max_value = max(Value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(Variable) %>%
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_larvaal, "lineplot_larvaal_km_", simplify(map(str_split(plots$Variable, " \\("), ~ str_replace(.[1], " ", "_"))), ".jpg"),
+     plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+
+plot_func <- function (dat) {
+  max_val <- max(dat$Value, na.rm = TRUE)
+  min_val <- min(dat$Value, na.rm = TRUE)
+  var <- unique(dat$Variable)
+  ggplot(dat, aes(afst, Value)) +
+       geom_line(aes(color=alternative), size=0.7) +
+       # scale_linetype_manual(values = c(3,2,1,1,1)) +
+       geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), 
+                 size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+       geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+       xlab("Distance from Vlissingen (km)") +
+       ylab(var) +
+       facet_wrap(~ scenario) +
+       theme_bw() + 
+       theme(strip.text = element_text(size = txts),
+             text = element_text(size = txts))
+}
+
+plots <- 
+  Data_larvaal_long_env %>%
+  filter(#scenario == "AplusCH",
+         jaar == 2046,
+         Variable %in% vars_env_noYear) %>% 
+  group_by(Variable) %>%
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_larvaal, "lineplot_larvaal_km_", simplify(map(str_split(plots$Variable, " \\("), ~ str_replace(.[1], " ", "_"))), ".jpg"),
+     plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+```
+
+
+```{r figuren omgevingsvariabelen adult, fig.height=4, fig.width=10}
+
+vars_env_noYear <- c("Water depth (m)","Water velocity (m/s)")
+vars_env_year <- setdiff(nams.env.adult, vars_env_noYear)
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+plot_func <- function (dat) {
+  max_val <- max(dat$max_value, na.rm = TRUE)
+  min_val <- min(dat$min_value, na.rm = TRUE)
+  var <- unique(dat$Variable)
+  ggplot(dat, aes(afst, mean_value)) +
+       geom_line(aes(color=alternative), size=0.7) +
+       geom_line(aes(y = min_value, color=alternative), linetype=2, size=0.5) +
+       geom_line(aes(y = max_value, color=alternative), linetype=2, size=0.5) +
+       # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+       # scale_linetype_manual(values = c(3,2,1,1,1)) +
+       geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), 
+                 size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+       geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+       xlab("Distance from Vlissingen (km)") +
+       ylab(var) +
+       facet_wrap(~ scenario) +
+       theme_bw() + 
+       theme(strip.text = element_text(size = txts),
+             text = element_text(size = txts))
+}
+
+plots <- 
+  Data_adult_long_env %>%
+  filter(#scenario == "AplusCH",
+         Variable %in% vars_env_year) %>% 
+  group_by(alternative, scenario, OMES, afst, Variable) %>% 
+  summarize_at(vars(Value), funs(mean_value = mean(., na.rm = TRUE),
+                                   min_value = min(., na.rm = TRUE),
+                                   max_value = max(., na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  group_by(Variable) %>%
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_adult, "lineplot_adult_km_", simplify(map(str_split(plots$Variable, " \\("), ~ str_replace(.[1], " ", "_"))), ".jpg"),
+     plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+
+plot_func <- function (dat) {
+  max_val <- max(dat$Value, na.rm = TRUE)
+  min_val <- min(dat$Value, na.rm = TRUE)
+  var <- unique(dat$Variable)
+  ggplot(dat, aes(afst, Value)) +
+       geom_line(aes(color=alternative), size=0.7) +
+       # scale_linetype_manual(values = c(3,2,1,1,1)) +
+       geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), 
+                 size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+       geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+       xlab("Distance from Vlissingen (km)") +
+       ylab(var) +
+       facet_wrap(~ scenario) +
+       theme_bw() + 
+       theme(strip.text = element_text(size = txts),
+             text = element_text(size = txts))
+}
+
+plots <- 
+  Data_adult_long_env %>%
+  filter(#scenario == "AplusCH",
+         jaar == 2046,
+         Variable %in% vars_env_noYear) %>% 
+  group_by(Variable) %>%
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_adult, "lineplot_adult_km_", simplify(map(str_split(plots$Variable, " \\("), ~ str_replace(.[1], " ", "_"))), ".jpg"),
+     plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+```
+
+
+```{r data SI per km}
+
+Data_larvaal_SI <- 
+  Data_larvaal %>% 
+  select(vars.group, afst, all_of(vars.score.larvaal)) %>% 
+  group_by_at(c(vars.group, "afst")) %>% 
+  summarise_all(funs(mean(sort(., decreasing=TRUE)[1:3], na.rm=TRUE))) %>% 
+  ungroup()
+
+Data_larvaal_long_SI <- 
+  Data_larvaal_SI %>%  
+  mutate(afst = as.integer(floor(afst))) %>% 
+  rename_at(vars.score.larvaal, ~ nams.score.larvaal) %>%
+  gather(key="Type_Score",value="Score",
+         all_of(nams.score.larvaal)) %>%
+  group_by_at(c(vars.group, "afst", "Type_Score")) %>% 
+  summarise_all(funs(Score_lwr = quantile(., 0.025, na.rm = TRUE),
+                     Score_upr = quantile(., 0.975, na.rm = TRUE),
+                     Score = mean(., na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  mutate(OMES = ordered(OMES),
+         jaar = ordered(jaar),
+         Type_Score = factor(Type_Score, levels = nams.score.larvaal))
+
+Data_larvaal_SI_gem <- 
+  Data_larvaal_long_SI %>% 
+  select(-jaar) %>% 
+  group_by(alternative, scenario, OMES, afst, Type_Score) %>% 
+  summarise_at(vars(Score), funs(Score_max = max(., na.rm = TRUE),
+                                 Score_min = min(., na.rm = TRUE),
+                                 Score = mean(., na.rm = TRUE))) %>% 
+  ungroup()
+
+
+Data_adult_long_SI <- 
+  Data_adult %>%  
+  select(vars.group, afst, all_of(vars.score.adult)) %>% 
+  mutate(afst = as.integer(floor(afst))) %>% 
+  rename_at(vars.score.adult, ~ nams.score.adult) %>%
+  gather(key="Type_Score",value="Score",
+         all_of(nams.score.adult)) %>%
+  group_by_at(c(vars.group, "afst", "Type_Score")) %>% 
+  summarise_all(funs(Score_lwr = quantile(., 0.025, na.rm = TRUE),
+                     Score_upr = quantile(., 0.975, na.rm = TRUE),
+                     Score = mean(., na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  mutate(OMES = ordered(OMES),
+         jaar = ordered(jaar),
+         Type_Score = factor(Type_Score, levels = nams.score.adult))
+
+
+Data_adult_SI_gem <- 
+  Data_adult_long_SI %>% 
+  select(-jaar) %>% 
+  group_by(alternative, scenario, OMES, afst, Type_Score) %>% 
+  summarise_at(vars(Score), funs(Score_max = max(., na.rm = TRUE),
+                                 Score_min = min(., na.rm = TRUE),
+                                 Score = mean(., na.rm = TRUE))) %>% 
+  ungroup()
+
+```
+
+
+```{r figuren SI larvaal per km, fig.height=4, fig.width=10}
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+
+plot_func <- function (dat) {
+  max_val <- max(dat$Score_max, na.rm = TRUE)
+  min_val <- min(dat$Score_min, na.rm = TRUE)
+  var <- unique(dat$Type_Score)
+  ggplot(dat, aes(afst, Score)) +
+       geom_line(aes(color=alternative), size=0.7) +
+       geom_line(aes(y = Score_min, color=alternative), linetype=2, size=0.5) +
+       geom_line(aes(y = Score_max, color=alternative), linetype=2, size=0.5) +
+       # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+       # scale_linetype_manual(values = c(3,2,1,1,1)) +
+       geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), 
+                 size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+       geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+       xlab("Distance from Vlissingen (km)") +
+       ylab(var) +
+       facet_wrap(~ scenario) +
+       theme_bw() + 
+       theme(strip.text = element_text(size = txts),
+             text = element_text(size = txts))
+}
+
+plots <- 
+  Data_larvaal_SI_gem %>% 
+  group_by(Type_Score) %>% 
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_larvaal_SI, "lineplot_larvaal_km_SI_", plots$Type_Score, ".jpg"), plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+
+# myPalette <- colorRampPalette(brewer.pal(9, "YlOrRd"))
+myPalette <- colorRampPalette(brewer.pal(11, "RdYlGn"))
+
+Data_larvaal_SI_gem %>% 
+  filter(Type_Score == "All") %>% 
+  mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score), decreasing = TRUE))) %>% 
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=Score)) +
+      scale_fill_gradientn(name = "SI",
+                           # colours = rev(myPalette(100)), 
+                           colours = myPalette(100), 
+                           limits = c(0,1)) +
+      geom_text(data=Afst.sal,
+                aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                size = lbls, angle=90, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() + 
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_larvaal_SI, "tileplot_larvaal_km_SI", ".jpg"), dpi = 600, width = wd, height = ht)
+
+
+Data_larvaal_SI_gem %>% 
+  filter(Type_Score == "All") %>% 
+  mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score), decreasing = TRUE))) %>% 
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=Score_min)) +
+      scale_fill_gradientn(name = "SI",
+                           # colours = rev(myPalette(100)), 
+                           colours = myPalette(100), 
+                           limits = c(0,1)) +
+      geom_text(data=Afst.sal,
+                aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                size = lbls, angle=90, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() + 
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_larvaal_SI, "tileplot_larvaal_km_SI_min", ".jpg"), dpi = 600, width = wd, height = ht)
+
+
+for (sc in Scenarios) {
+  Data_larvaal_long_SI %>%
+    filter(scenario == sc) %>%
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)),
+                             colours = myPalette(100),
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -5, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_grid(jaar ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_larvaal_SI, sc, "/tileplot_larvaal_km_SI_all_", sc, ".jpg"), dpi = 600, width = 10, height = 5)
+}
+
+
+for (sc in Scenarios) {
+  Data_larvaal_SI_gem %>%
+    filter(scenario == sc) %>%
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)),
+                             colours = myPalette(100),
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_larvaal_SI, sc, "/tileplot_larvaal_km_SI_", sc, ".jpg"), dpi = 600, width = 8, height = 5)
+}
+
+
+for (sc in Scenarios) {
+  Data_larvaal_SI_gem %>%
+    filter(scenario == sc) %>%
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score_min)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)),
+                             colours = myPalette(100),
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_larvaal_SI, sc, "/tileplot_larvaal_km_SI_min_", sc, ".jpg"), dpi = 600, width = 8, height = 5)
+}
+
+```
+
+
+```{r figuren SI adult per km, fig.height=4, fig.width=10}
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+
+plot_func <- function (dat) {
+  max_val <- max(dat$Score_max, na.rm = TRUE)
+  min_val <- min(dat$Score_min, na.rm = TRUE)
+  var <- unique(dat$Type_Score)
+  ggplot(dat, aes(afst, Score)) +
+    geom_line(aes(color=alternative), size=0.7) +
+    geom_line(aes(y = Score_min, color=alternative), linetype=2, size=0.5) +
+    geom_line(aes(y = Score_max, color=alternative), linetype=2, size=0.5) +
+    # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+    # scale_linetype_manual(values = c(3,2,1,1,1)) +
+    geom_text(data=Afst.sal, aes(x=afstand_monding, y=min_val, label=locatie), size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+    geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+    xlab("Distance from Vlissingen (km)") +
+    ylab(var) +
+    facet_wrap(~ scenario) +
+    theme_bw() + 
+    theme(strip.text = element_text(size = txts),
+          text = element_text(size = txts))
+}
+
+plots <- Data_adult_SI_gem %>% 
+  group_by(Type_Score) %>% 
+  do(plot = plot_func(.))
+plots$plot
+
+map2(paste0(figuren_adult_SI, "lineplot_adult_km_SI_", plots$Type_Score, ".jpg"), plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+
+# myPalette <- colorRampPalette(brewer.pal(9, "YlOrRd"))
+myPalette <- colorRampPalette(brewer.pal(11, "RdYlGn"))
+
+Data_adult_SI_gem %>% 
+  filter(#scenario == "AplusCH",
+         Type_Score == "All") %>% 
+  mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score), decreasing = TRUE))) %>% 
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=Score)) +
+      scale_fill_gradientn(name = "SI",
+                           # colours = rev(myPalette(100)), 
+                           colours = myPalette(100), 
+                           limits = c(0,1)) +
+      geom_text(data=Afst.sal,
+                aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                size = lbls, angle=90, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() + 
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_adult_SI, "tileplot_adult_km_SI", ".jpg"), dpi = 600, width = wd, height = ht)
+
+
+Data_adult_SI_gem %>% 
+  filter(Type_Score == "All") %>% 
+  mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score), decreasing = TRUE))) %>% 
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=Score_min)) +
+      scale_fill_gradientn(name = "SI",
+                           # colours = rev(myPalette(100)), 
+                           colours = myPalette(100), 
+                           limits = c(0,1)) +
+      geom_text(data=Afst.sal,
+                aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                size = lbls, angle=90, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() + 
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_adult_SI, "tileplot_adult_km_SI_min", ".jpg"), dpi = 600, width = wd, height = ht)
+
+
+for (sc in Scenarios) {
+  Data_adult_long_SI %>% 
+    filter(scenario == sc) %>% 
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>% 
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)), 
+                             colours = myPalette(100), 
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x=afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -5, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_grid(jaar ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_adult_SI, sc, "/tileplot_adult_km_SI_all_", sc, ".jpg"), dpi = 600, width = 8, height = 5)
+}
+
+
+for (sc in Scenarios) {
+  Data_adult_SI_gem %>% 
+    filter(scenario == sc) %>% 
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>% 
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)), 
+                             colours = myPalette(100), 
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_adult_SI, sc, "/tileplot_adult_km_SI_", sc, ".jpg"), dpi = 600, width = 8, height = 4)
+}
+
+
+for (sc in Scenarios) {
+  Data_adult_SI_gem %>% 
+    filter(scenario == sc) %>% 
+    mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score)))) %>% 
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=Score_min)) +
+        scale_fill_gradientn(name = "SI",
+                             # colours = rev(myPalette(100)), 
+                             colours = myPalette(100), 
+                             limits = c(0,1)) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  size = lbls, angle=90, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(unique(.$scenario)) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() + 
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))} %>% 
+    print()
+  
+  ggsave(paste0(figuren_adult_SI, sc, "/tileplot_adult_km_SI_min_", sc, ".jpg"), dpi = 600, width = 8, height = 4)
+}
+
+```
+
+
+```{r data verschil per km}
+
+mean_fun <- function(x) {if_else(any(!is.na(x)), mean(x, na.rm = TRUE), NaN) %>% if_else(is.infinite(.),NaN,.) %>% if_else(abs(.) < 0.05, 0, .)}
+max_fun <- function(x) {if_else(any(!is.na(x)), max(x, na.rm = TRUE), NaN) %>% if_else(is.infinite(.),NaN,.) %>% if_else(abs(.) < 0.0, 0, .)}
+min_fun <- function(x) {if_else(any(!is.na(x)), min(x, na.rm = TRUE), NaN) %>% if_else(is.infinite(.),NaN,.) %>% if_else(abs(.) < 0.05, 0, .)}
+eval_fun <- function(x) {if_else(any(!is.na(x)), min(x, na.rm = TRUE), NaN) %>% if_else(is.infinite(.),NaN,.) %>% if_else(abs(.) < 0.05, 0, .)}
+
+
+Data_larvaal_verschil_wide <-
+  Data_larvaal_SI_gem %>%
+  select(alternative, scenario, OMES, afst, Type_Score, Score, Score_min) %>%
+  pivot_wider(id_cols = c(scenario, OMES, afst, Type_Score),
+              names_from = alternative,
+              values_from = c(Score, Score_min)) %>%
+  mutate(delta_mean_C1 = `Score_C1` - `Score_REF`,
+         # delta_mean_C2 = `Score_C2` - `Score_REF`,
+         delta_mean_C3 = `Score_C3` - `Score_REF`,
+         delta_min_C1 = `Score_min_C1` - `Score_min_REF`,
+         # delta_min_C2 = `Score_min_C2` - `Score_min_REF`,
+         delta_min_C3 = `Score_min_C3` - `Score_min_REF`)
+
+Data_larvaal_verschil_gem <-
+  Data_larvaal_verschil_wide %>%
+  select(scenario, OMES, afst, Type_Score,
+         delta_mean_C1, #delta_mean_C2, 
+         delta_mean_C3,
+         delta_min_C1, # delta_min_C2, 
+         delta_min_C3) %>%
+  pivot_longer(cols = delta_mean_C1:delta_min_C3,
+               names_to = c("type_delta", "alternative"),
+               values_to = "delta",
+               names_pattern = "(.*)_(.*)") %>%
+  pivot_wider(id_cols = c(alternative, scenario, OMES, afst, Type_Score),
+              names_from = type_delta,
+              values_from = delta) %>%
+  mutate(alternative = factor(alternative, levels = c("C1", "C3")),
+  # mutate(alternative = factor(alternative, levels = c("C1", "C2", "C3")),
+         delta_eval = delta_min)
+
+
+Data_adult_verschil_wide <-
+  Data_adult_SI_gem %>%
+  select(alternative, scenario, OMES, afst, Type_Score, Score, Score_min) %>%
+  pivot_wider(id_cols = c(scenario, OMES, afst, Type_Score),
+              names_from = alternative,
+              values_from = c(Score, Score_min)) %>%
+  mutate(delta_mean_C1 = `Score_C1` - `Score_REF`,
+         # delta_mean_C2 = `Score_C2` - `Score_REF`,
+         delta_mean_C3 = `Score_C3` - `Score_REF`,
+         delta_min_C1 = `Score_min_C1` - `Score_min_REF`,
+         # delta_min_C2 = `Score_min_C2` - `Score_min_REF`,
+         delta_min_C3 = `Score_min_C3` - `Score_min_REF`)
+
+Data_adult_verschil_gem <-
+  Data_adult_verschil_wide %>%
+  select(scenario, OMES, afst, Type_Score,
+         delta_mean_C1, # delta_mean_C2, 
+         delta_mean_C3,
+         delta_min_C1, # delta_min_C2, 
+         delta_min_C3) %>%
+  pivot_longer(cols = delta_mean_C1:delta_min_C3,
+               names_to = c("type_delta", "alternative"),
+               values_to = "delta",
+               names_pattern = "(.*)_(.*)") %>%
+  pivot_wider(id_cols = c(alternative, scenario, OMES, afst, Type_Score),
+              names_from = type_delta,
+              values_from = delta) %>%
+  mutate(alternative = factor(alternative, levels = c("C1", "C3")),
+  # mutate(alternative = factor(alternative, levels = c("C1", "C2", "C3")),
+         delta_eval = delta_min)
+
+```
+
+
+```{r trans functies}
+
+# transform function
+lal_trans_transform <-
+  function(tr, pw) {
+    function(x) case_when (
+      x <= -tr ~ -(abs(x)^(1/pw)),
+      x >= tr ~ x^(1/pw),
+      TRUE ~ 0
+    )
+  }
+
+# inverse transform
+lal_trans_inverse <-
+  function(tr, pw) {
+    function(x) case_when (
+      x <= -(abs(-tr)^(1/pw)) ~ -(abs(x)^(pw)),
+      x >= tr^(1/pw) ~ x^pw,
+      TRUE ~ 0
+    )
+  }
+
+```
+
+
+```{r figuren verschil per km larvaal, fig.height=4, fig.width=10}
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+# plot_func <- function (dat) {
+#   max_val <- max(dat$delta_max, na.rm = TRUE)
+#   min_val <- min(dat$delta_min, na.rm = TRUE)
+#   var <- unique(dat$Type_Score)
+#   ggplot(dat, aes(afst, delta_mean)) +
+#     geom_line(aes(color=alternative), size=0.7) +
+#     geom_line(aes(y = delta_min, color=alternative), linetype=2, size=0.5) +
+#     geom_line(aes(y = delta_max, color=alternative), linetype=2, size=0.5) +
+#     # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+#     # scale_linetype_manual(values = c(3,2,1,1,1)) +
+#     geom_text(data=Afst.sal, aes(x = afstand_merelbeke, y=min_val, label=locatie), 
+#               size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+#     geom_vline(data = Afst.sal, aes(xintercept = afstand_merelbeke), linetype = 3, color = "grey25") +
+#     xlab("Distance from Merelbeke (km)") +
+#     ylab(var) +
+#     facet_wrap(~ scenario) +
+#     theme_bw() + 
+#     theme(strip.text = element_text(size = txts),
+#           text = element_text(size = txts))
+# }
+# 
+# plots <- Data_larvaal_verschil_gem %>% 
+#   group_by(Type_Score) %>% 
+#   do(plot = plot_func(.))
+# plots$plot
+# 
+# map2(paste0(figuren_larvaal_delta_SI, "fint_larvaal_km_delta_SI_", plots$Type_Score, ".jpg"), plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+
+myPalette <- colorRampPalette(brewer.pal(11, "RdBu"))
+
+tr <- 0.05
+pw <- 1.5
+lal_thresh_trans <-
+  function() scales::trans_new("lal_thresh",
+                               lal_trans_transform(tr, pw), lal_trans_inverse(tr, pw))
+
+clrs <- 100
+lims <- c(-1.01,1.01)
+tr2 <-
+  round(clrs/2*lal_trans_transform(tr, pw)(tr)/lal_trans_transform(tr, pw)(max(abs(lims), na.rm = TRUE)))
+
+Data_larvaal_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=delta_mean)) +
+      scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           # colours = myPalette(100),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],
+                                       rep("white", 2*tr2), myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+                           # limits = c(-max(abs(.$delta_mean), na.rm = TRUE),max(abs(.$delta_mean), na.rm = TRUE))) +
+      geom_text(data=Afst.sal,
+                aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                angle=90, size = lbls, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() +
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_larvaal_delta_SI, "tileplot_larvaal_km_delta_SI_mean.jpg"), dpi = 600, width = wd, height = ht)
+
+
+
+Data_larvaal_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=delta_eval)) +
+      scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           # colours = myPalette(100),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+                           # limits = c(-max(abs(.$delta_eval), na.rm = TRUE),max(abs(.$delta_eval), na.rm = TRUE))) +
+      geom_text(data=Afst.sal,
+                aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                angle=90, size = lbls, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() +
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_larvaal_delta_SI, "tileplot_larvaal_km_delta_SI_min.jpg"), dpi = 600, width = wd, height = ht)
+
+
+wd <- 10
+ht <- 6
+txts <- 12
+lbls <- 4
+
+
+for (sc in Scenarios) {
+  Data_larvaal_verschil_gem %>%
+    filter(scenario == sc) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=delta_mean)) +
+        scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  angle=90, size = lbls, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(sc) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() +
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))}
+
+  ggsave(paste0(figuren_larvaal_delta_SI, sc, "/tileplot_larvaal_km_delta_SI_mean_type_score_", sc, ".jpg"), dpi = 600, width = wd, height = ht)
+}
+
+
+for (sc in Scenarios) {
+  Data_larvaal_verschil_gem %>%
+    filter(scenario == sc) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=delta_eval)) +
+        scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  angle=90, size = lbls, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(sc) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() +
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))}
+
+  ggsave(paste0(figuren_larvaal_delta_SI, sc, "/tileplot_larvaal_km_delta_SI_min_type_score_", sc, ".jpg"), dpi = 600, width = wd, height = ht)
+}
+
+```
+
+
+```{r figuren verschil per km adult, fig.height=4, fig.width=10}
+
+wd <- 10
+ht <- 4
+txts <- 12
+lbls <- 4
+
+
+# plot_func <- function (dat) {
+#   max_val <- max(dat$delta_max, na.rm = TRUE)
+#   min_val <- min(dat$delta_min, na.rm = TRUE)
+#   var <- unique(dat$Type_Score)
+#   ggplot(dat, aes(afst, delta_mean)) +
+#     geom_line(aes(color=alternative), size=0.7) +
+#     geom_line(aes(y = delta_min, color=alternative), linetype=2, size=0.5) +
+#     geom_line(aes(y = delta_max, color=alternative), linetype=2, size=0.5) +
+#     # geom_ribbon(aes(ymin = min_value, ymax = max_value, fill = alternative), alpha = 0.25) +
+#     # scale_linetype_manual(values = c(3,2,1,1,1)) +
+#     geom_text(data=Afst.sal, aes(x = afstand_merelbeke, y=min_val, label=locatie),
+#               size = lbls, angle=90, nudge_x = -3, nudge_y = 0.03*(max_val-min_val), hjust="left") +
+#     geom_vline(data = Afst.sal, aes(xintercept = afstand_merelbeke), linetype = 3, color = "grey25") +
+#     xlab("Distance from Merelbeke (km)") +
+#     ylab(var) +
+#     facet_wrap(~ scenario) +
+#     theme_bw() +
+#     theme(strip.text = element_text(size = txts),
+#           text = element_text(size = txts))
+# }
+#
+# plots <- Data_adult_verschil_gem %>%
+#   group_by(Type_Score) %>%
+#   do(plot = plot_func(.))
+# plots$plot
+#
+# map2(paste0(figuren_adult_delta_SI, "fint_adult_km_delta_SI_", plots$Type_Score, ".jpg"), plots$plot, ggsave, dpi = 600, width = wd, height = ht)
+
+
+# myPalette <- colorRampPalette(brewer.pal(11, "RdBu"))
+# 
+# tr <- 0.05
+# pw <- 1.5
+# lal_thresh_trans <-
+#   function() scales::trans_new("lal_thresh",
+#                                lal_trans_transform(tr, pw), lal_trans_inverse(tr, pw))
+# 
+# clrs <- 100
+# lims <- c(-1.01,1.01)
+# tr2 <-
+#   round(clrs/2*lal_trans_transform(tr, pw)(tr)/lal_trans_transform(tr, pw)(max(abs(lims), na.rm = TRUE)))
+
+
+Data_adult_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=delta_mean)) +
+      scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+      geom_text(data=Afst.sal,
+                aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                angle=90, size = lbls, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() +
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_adult_delta_SI, "tileplot_adult_km_delta_SI_mean.jpg"), dpi = 600, width = wd, height = ht)
+
+
+Data_adult_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  {ggplot(., aes(x=afst, y=alternative)) +
+      geom_tile(aes(fill=delta_eval)) +
+      scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                           colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                           na.value = "grey85",
+                           trans = "lal_thresh",
+                           breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                           limits = lims) +
+      geom_text(data=Afst.sal,
+                aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                angle=90, size = lbls, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+      geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+      scale_y_discrete(limits = rev(levels(.$alternative))) +
+      xlab("Distance from Vlissingen (km)") + ylab("") +
+      facet_wrap(~ scenario) +
+      theme_bw() +
+      theme(strip.text = element_text(size = txts),
+            text = element_text(size = txts))}
+
+ggsave(paste0(figuren_adult_delta_SI, "tileplot_adult_km_delta_SI_min.jpg"), dpi = 600, width = wd, height = ht)
+
+
+wd <- 10
+ht <- 6
+txts <- 12
+lbls <- 4
+
+for (sc in Scenarios) {
+  Data_adult_verschil_gem %>%
+    filter(scenario == sc) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=delta_mean)) +
+        scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                             colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                             na.value = "grey85",
+                             trans = "lal_thresh",
+                             breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                             limits = lims) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  angle=90, size = lbls, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(sc) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() +
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))}
+
+  ggsave(paste0(figuren_adult_delta_SI, sc, "/tileplot_adult_km_delta_SI_mean_type_score_", sc, ".jpg"), dpi = 600, width = 8, height = 5)
+}
+
+
+for (sc in Scenarios) {
+  Data_adult_verschil_gem %>%
+    filter(scenario == sc) %>%
+    {ggplot(., aes(x=afst, y=alternative)) +
+        geom_tile(aes(fill=delta_eval)) +
+        scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                             colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],rep("white", 2*tr2),myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                             na.value = "grey85",
+                             trans = "lal_thresh",
+                             breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                             limits = lims) +
+        geom_text(data=Afst.sal,
+                  aes(x = afstand_monding, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+                  angle=90, size = lbls, nudge_x = -4, nudge_y = -0.5, hjust="left", color = "grey25") +
+        geom_vline(data = Afst.sal, aes(xintercept = afstand_monding), linetype = 3, color = "grey25") +
+        scale_y_discrete(limits = rev(levels(.$alternative))) +
+        ggtitle(sc) +
+        xlab("Distance from Vlissingen (km)") + ylab("") +
+        facet_wrap( ~ Type_Score) +
+        theme_bw() +
+        theme(strip.text = element_text(size = txts),
+              text = element_text(size = txts))}
+
+  ggsave(paste0(figuren_adult_delta_SI, sc, "/tileplot_adult_km_delta_SI_min_type_score_", sc, ".jpg"), dpi = 600, width = 8, height = 5)
+}
+
+```
+
+
+```{r resultaten SPM REF, eval = FALSE}
+
+# deze chunk voorlopig inactief; bouwt verder op lijnen 109 tem 137 in script 05 (berekening)
+# ik snap de meerwaarde niet momenteel; 
+# zie ook figuur fint_larvaal_km_SPMref_SI_min onder:
+# Q:\Projects\PRJ_Schelde\Beheer studie Boven Zeeschelde\C-alternatieven\fint\resultaten\figuren\larvaal\SI
+
+# Data_larvaal_SPMref <-
+#   Data_larvaal %>%
+#   select(vars.group, afst, all_of(c("SI", "SI_SPMref"))) %>%
+#   group_by_at(c(vars.group, "afst")) %>%
+#   summarise_all(funs(mean(sort(., decreasing=TRUE)[1:3], na.rm=TRUE))) %>%
+#   ungroup()
+# 
+# Data_larvaal_long_SPMref <-
+#   Data_larvaal_SPMref %>%
+#   mutate(afst = as.integer(floor(afst))) %>%
+#   gather(key="Type_Score",value="Score",
+#          all_of(c("SI", "SI_SPMref"))) %>%
+#   group_by_at(c(vars.group, "afst", "Type_Score")) %>%
+#   summarise_all(funs(Score_lwr = quantile(., 0.025, na.rm = TRUE),
+#                      Score_upr = quantile(., 0.975, na.rm = TRUE),
+#                      Score = mean(., na.rm = TRUE))) %>%
+#   ungroup() %>%
+#   mutate(OMES = ordered(OMES),
+#          jaar = ordered(jaar),
+#          Type_Score = factor(Type_Score, levels = c("SI", "SI_SPMref")))
+# 
+# Data_larvaal_SPMref_gem <-
+#   Data_larvaal_long_SPMref %>%
+#   select(-jaar) %>%
+#   group_by(alternative, scenario, OMES, afst, Type_Score) %>%
+#   summarise_at(vars(Score), funs(Score_max = max(., na.rm = TRUE),
+#                                  Score_min = min(., na.rm = TRUE),
+#                                  Score = mean(., na.rm = TRUE))) %>%
+#   ungroup()
+# 
+# 
+# myPalette <- colorRampPalette(brewer.pal(11, "RdYlGn"))
+# 
+# wd <- 10
+# ht <- 4
+# txts <- 20
+# lbls <- 8
+# 
+# Data_larvaal_SPMref_gem %>%
+#   # mutate(Type_Score = factor(Type_Score, levels = sort(unique(Type_Score), decreasing = TRUE))) %>%
+#   {ggplot(., aes(x=afst, y=alternative)) +
+#       geom_tile(aes(fill=Score_min)) +
+#       scale_fill_gradientn(name = "SI",
+#                            # colours = rev(myPalette(100)),
+#                            colours = myPalette(100),
+#                            limits = c(0,1)) +
+#       geom_text(data=Afst.sal,
+#                 aes(x = afstand_merelbeke, y = levels(.$alternative)[nlevels(.$alternative)], label = locatie),
+#                 size = lbls, angle=90, nudge_x = -3, nudge_y = -0.5, hjust="left", color = "grey25") +
+#       geom_vline(data = Afst.sal, aes(xintercept = afstand_merelbeke), linetype = 3, color = "grey25") +
+#       scale_y_discrete(limits = rev(levels(.$alternative))) +
+#       xlab("distance from Merelbeke (km)") + ylab("") +
+#       facet_grid(Type_Score ~ scenario) +
+#       theme_bw() +
+#       theme(strip.text = element_text(size = txts),
+#             text = element_text(size = txts))}
+# 
+# ggsave(paste0(figuren_larvaal_SI, "fint_larvaal_km_SPMref_SI_min", nevengeul, ".jpg"), dpi = 600, width = wd, height = ht)
+
+```
+
+
+```{r tabellen SI per km}
+
+Data_larvaal_SI_gem %>% 
+  filter(Type_Score == "All") %>% 
+  arrange(scenario, alternative, afst) %>% 
+  write_delim(paste0("../../Output/tabellen/fint_larvaal_SI.csv"), delim = ";")
+
+
+Data_adult_SI_gem %>% 
+  filter(Type_Score == "All") %>% 
+  arrange(scenario, alternative, afst) %>% 
+  write_delim(paste0("../../Output/tabellen/fint_adult_SI.csv"), delim = ";")
+
+```
+
+
+```{r tabellen delta SI per km}
+
+Data_larvaal_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  arrange(scenario, alternative, afst) %>%
+  write_delim(paste0("../../Output/tabellen/fint_larvaal_delta_SI.csv"), delim = ";")
+
+
+Data_adult_verschil_gem %>%
+  filter(Type_Score == "All") %>%
+  arrange(scenario, alternative, afst) %>%
+  write_delim(paste0("../../Output/tabellen/fint_adult_delta_SI.csv"), delim = ";")
+
+```
+

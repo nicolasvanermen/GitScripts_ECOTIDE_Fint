@@ -1,0 +1,275 @@
+---
+title: "Fint synthese C-alternatieven"
+author: "Joost Vanoverbeke"
+date: "2 december 2022"
+output:
+  html_document: default
+  word_document:
+    fig_height: 4
+    fig_width: 7
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, autodep = TRUE, cache.extra = R.version)
+# showtext::showtext_opts(dpi = 300)
+
+```
+
+
+```{r libraries, cache=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(janitor)
+library(writexl)
+library(INBOtheme)
+library(RColorBrewer)
+
+options(stringsAsFactors = FALSE)
+
+source("../../src/afstanden.R")
+
+```
+
+
+```{r alternatieven en scenarios}
+
+alternatives <-
+  c("2050REF_C", "2050C1", "2050C2", "2050C3")
+# alternatives <-
+#   c("2050REF_C")
+# alternatives <-
+#   c("2050C1")
+# alternatives <-
+#   c("2050C2")
+# alternatives <-
+#   c("2050C3")
+
+scenarios <-
+c("A0CN", "AminCL", "AplusCH")
+# scenarios <-
+#   c("A0CN")
+# scenarios <-
+#   c("AplusCH")
+
+
+nevengeul <- ""
+# nevengeul <- "_zonderNG"
+
+```
+
+
+```{r afstanden secties}
+
+sectie_afst <-
+  tibble(sectie = 1:6, 
+         begin_afst = c(0,11,23,35,51,57),
+         eind_afst = c(11,23,35,51,57,64))
+
+```
+
+
+```{r tabellen SI per km}
+
+Data_larvaal_SI_gem <- 
+  read_delim(paste0("../resultaten/tabellen/fint_larvaal_SI", nevengeul, ".csv"), delim = ";")
+
+Data_adult_SI_gem <-
+  read_delim(paste0("../resultaten/tabellen/fint_adult_SI", nevengeul, ".csv"), delim = ";")
+
+```
+
+
+```{r tabellen delta SI per km}
+
+Data_larvaal_verschil_gem <-
+  read_delim(paste0("../resultaten/tabellen/fint_larvaal_delta_SI", nevengeul, ".csv"), delim = ";")
+
+Data_adult_verschil_gem <-
+  read_delim(paste0("../resultaten/tabellen/fint_adult_delta_SI", nevengeul, ".csv"), delim = ";")
+
+```
+
+
+```{r SI}
+
+data_SI <-
+  Data_larvaal_SI_gem %>% 
+  select(alternative, scenario, afst, SI_min = Score_min, SI_mean = Score) %>% 
+  mutate(stage = "larval") %>% 
+  pivot_longer(cols = contains("SI_"),
+               names_to = "type_score",
+               values_to = "SI") %>% 
+  bind_rows(Data_adult_SI_gem %>% 
+              select(alternative, scenario, afst, SI_min = Score_min, SI_mean = Score) %>% 
+              mutate(stage = "adult") %>% 
+              pivot_longer(cols = contains("SI_"),
+                           names_to = "type_score",
+                           values_to = "SI")) %>% 
+  mutate(sectie = map_int(afst, ~which(. < (sectie_afst$eind_afst+1))[1]),
+         sectie = ifelse(is.na(sectie), 7, sectie)) %>% 
+  filter(!is.na(sectie))
+
+data_SI_mean <-
+  data_SI %>% 
+  group_by(alternative, scenario, stage, sectie, type_score) %>% 
+  summarise(across(SI, .fns = list(mean = mean, geom = ~exp(mean(log(.)))))) %>% 
+  ungroup()
+
+
+data_SI_mean %>% 
+  ggplot(aes(SI_mean, SI_geom)) +
+  geom_point(aes(color = type_score))
+
+
+myPalette <- colorRampPalette(brewer.pal(11, "RdYlGn"))
+
+data_SI_mean %>% 
+  filter(scenario == "A0CN") %>% 
+  pivot_longer(cols = contains("SI_"),
+               names_to = "type_mean",
+               values_to = "SI") %>% 
+  ggplot(aes(ordered(sectie), alternative)) +
+  geom_tile(aes(fill = SI)) +
+  scale_fill_gradientn(name = "SI",
+                       # colours = rev(myPalette(100)), 
+                       colours = myPalette(100), 
+                       limits = c(0,1)) +
+  facet_grid(type_score + type_mean ~ stage)
+
+```
+
+
+```{r trans functies}
+
+# transform function
+lal_trans_transform <- 
+  function(tr, pw) {
+    function(x) case_when (
+      x <= -tr ~ -(abs(x)^(1/pw)),
+      x >= tr ~ x^(1/pw),
+      TRUE ~ 0
+    )
+  }
+
+# inverse transform
+lal_trans_inverse <- 
+  function(tr, pw) {
+    function(x) case_when (
+      x <= -(abs(-tr)^(1/pw)) ~ -(abs(x)^(pw)),
+      x >= tr^(1/pw) ~ x^pw,
+      TRUE ~ 0
+    )
+  }
+
+```
+
+
+```{r delta SI}
+
+data_delta_SI <-
+  Data_larvaal_verschil_gem %>% 
+  select(alternative, scenario, afst, delta_min, delta_mean) %>% 
+  mutate(stage = "larval") %>% 
+  pivot_longer(cols = contains("delta_"),
+               names_to = "type_score",
+               values_to = "delta_SI") %>% 
+  bind_rows(Data_adult_verschil_gem %>% 
+              select(alternative, scenario, afst, delta_min, delta_mean) %>% 
+              mutate(stage = "adult") %>% 
+              pivot_longer(cols = contains("delta_"),
+                           names_to = "type_score",
+                           values_to = "delta_SI")) %>% 
+  mutate(sectie = map_int(afst, ~which(. < (sectie_afst$eind_afst+1))[1]),
+         sectie = ifelse(is.na(sectie), 7, sectie)) %>% 
+  filter(!is.na(sectie))
+
+data_delta_SI_mean <-
+  data_delta_SI %>% 
+  group_by(alternative, scenario, stage, sectie, type_score) %>% 
+  summarise(across(delta_SI, ~mean(., na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  mutate(alternative = factor(alternative, levels = alternatives),
+         stage = factor(stage, levels = c("larval", "adult")))
+
+
+myPalette <- colorRampPalette(brewer.pal(11, "RdBu"))
+
+tr <- 0.01
+pw <- 1.5
+lal_thresh_trans <- 
+  function() scales::trans_new("lal_thresh", 
+                               lal_trans_transform(tr, pw), lal_trans_inverse(tr, pw))
+
+clrs <- 100
+lims <- c(-1.01,1.01)
+tr2 <-
+  round(clrs/2*lal_trans_transform(tr, pw)(tr)/lal_trans_transform(tr, pw)(max(abs(lims), na.rm = TRUE)))
+
+data_delta_SI_mean %>% 
+  filter(scenario == "A0CN") %>% 
+  ggplot(aes(ordered(sectie), alternative)) +
+  geom_tile(aes(fill = delta_SI)) +
+  scale_y_discrete(limits = rev) +
+  scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                       # colours = myPalette(100),
+                       colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],
+                                   rep("white", 2*tr2), myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                       na.value = "grey85",
+                       trans = "lal_thresh",
+                       breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                       limits = lims) +
+  facet_grid(type_score ~ stage)
+
+data_delta_SI_mean %>% 
+  filter(scenario == "A0CN",
+         type_score == "delta_min",
+         stage == "larval") %>% 
+  ggplot(aes(ordered(sectie), alternative)) +
+  scale_y_discrete(limits = rev) +
+  geom_tile(aes(fill = delta_SI)) +
+  scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                       # colours = myPalette(100),
+                       colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],
+                                   rep("white", 2*tr2), myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                       na.value = "grey85",
+                       trans = "lal_thresh",
+                       breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                       limits = lims) +
+  facet_wrap( ~ stage, ncol = 1)
+
+data_delta_SI_mean %>% 
+  filter(scenario == "A0CN",
+         type_score == "delta_min",
+         stage == "adult") %>% 
+  ggplot(aes(ordered(sectie), alternative)) +
+  scale_y_discrete(limits = rev) +
+  geom_tile(aes(fill = delta_SI)) +
+  scale_fill_gradientn(name = expression(paste(Delta, "SI")),
+                       # colours = myPalette(100),
+                       colours = c(myPalette(clrs)[1:(round(clrs/2)-tr2)],
+                                   rep("white", 2*tr2), myPalette(clrs)[(round(clrs/2)+1+tr2):clrs]),
+                       na.value = "grey85",
+                       trans = "lal_thresh",
+                       breaks = c(-1,-0.5,-0.2,-0.05,0.05,0.2,0.5,1),
+                       limits = lims) +
+  facet_wrap( ~ stage, ncol = 1)
+
+
+for (scen in unique(data_delta_SI_mean$scenario)) {
+  for (stg in unique(data_delta_SI_mean$stage)) {
+    data_delta_SI_mean %>% 
+      filter(scenario == scen,
+             type_score == "delta_min",
+             stage == stg) %>% 
+      select(-scenario, -stage, -type_score) %>% 
+      pivot_wider(names_from = alternative,
+                  values_from = delta_SI) %>% 
+      write_xlsx(str_c("../resultaten/tabellen/sectie/delta_SI_sectie_", stg, "_", scen, ".xlsx"))
+  }
+}
+
+```
+

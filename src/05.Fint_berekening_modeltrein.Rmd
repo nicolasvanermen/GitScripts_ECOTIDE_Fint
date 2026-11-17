@@ -1,0 +1,214 @@
+---
+title: "Fint berekening SI C-alternatieven"
+author: "Joost Vanoverbeke"
+date: "22 juli 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(parallel)
+
+options(stringsAsFactors = FALSE) 
+
+source("../../../../../R_functies/hulpfuncties_sort.R")
+source("../../../Basis/Fuzzy_logic/Fuzzy_logic.R")
+
+```
+
+
+```{r alternatief en scenario}
+
+# Referentie <- "REF"
+
+# alternatief <- "2050REF_C"
+Alternatief <- "C3"
+# alternatief <- "2050C2"
+# alternatief <- "2050C3"
+
+Scenario <- "A0CN"
+# scenario <- "AminCL"
+# scenario <- "AplusCH"
+
+Alternatief.scenario <- str_c(Alternatief, Scenario, sep = "_")
+# Referentie.scenario <- str_c(Referentie, Scenario, sep = "_")
+
+```
+
+
+```{r nodes voor parallelle berekening}
+
+Nds <- 2
+
+```
+
+
+```{r ophalen gegevens}
+
+Fint.data <- 
+  read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, ".csv"), delim = ";")
+
+Fint.data.1D <- 
+  read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D.csv"), delim = ";")
+
+# Fint.data.REF <-
+#   read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Referentie.scenario, ".csv"), delim = ";")
+# 
+# Fint.data.1D.REF <-
+#   read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Referentie.scenario, "_1D.csv"), delim = ";")
+
+```
+
+
+```{r berekenen geschiktheidsscore larvaal, eval=TRUE}
+
+cat("\n berekening larvaal \n")
+
+Data.larvaal <- 
+  Fint.data %>% 
+  select(afstand_vlissingen, Omes, jaar, X, Y, 
+         temp_linear, oxygen_linear, salinity_linear, spm_depth_avg_linear, zoo_C_linear, depth, max_vel) %>% 
+  drop_na()
+
+names(Data.larvaal) <- 
+  c("afst","OMES","jaar","x","y",tolerance_larval$var)
+
+Vars <-
+  tolerance_larval %>% 
+  filter(!(var %in% c("temp"))) %>% # alle variabelen behalve temp
+  pull(var)
+
+
+cat("   berekening op alle variabelen \n")
+
+#### berekenen op alle variabelen ####
+
+new_set_larval <- 
+  select_variables(tolerance_larval, rules_larval, Vars)
+
+Data.larvaal$SI <- 
+  Data.larvaal %>% 
+  calculate_SI_par(new_set_larval$new_tolerance, new_set_larval$new_rules, nodes = Nds)
+
+
+cat("   berekening per variabele \n")
+
+#### berekenen per variabele ####
+for(vr in Vars) {
+  cat("     var = ", vr, "\n")
+  new_set <- 
+    select_variables(tolerance_larval, rules_larval, vr)
+  Data.larvaal[str_c("SI_", vr)] <-
+    Data.larvaal %>% 
+    calculate_SI_par(new_set$new_tolerance, new_set$new_rules, nodes = Nds)
+}
+
+
+# cat("   berekening delta SSC = 0 \n")
+# 
+# #### delta SSC = 0 ####
+# Data.larvaal_REF <- 
+#   fintData %>% 
+#   select(Afstand_GR, OMES, Jaar, X, Y, 
+#          Temp.linear, Oxygen.linear, Salinity.linear, ZooC.linear, Depth, MaxVel) %>% 
+#   mutate(Jaar = round(Jaar, 1)) %>% 
+#   left_join(fintData.1D_REF %>% 
+#               select(Afstand_GR, Jaar, SPM.depthAvg.linear) %>% 
+#               mutate(Jaar = round(Jaar, 1))) %>% 
+#   select(Afstand_GR, OMES, Jaar, X, Y, 
+#          Temp.linear, Oxygen.linear, Salinity.linear, SPM.depthAvg.linear, ZooC.linear, Depth, MaxVel) %>% 
+#   drop_na()
+# names(Data.larvaal_REF) <- 
+#   c("afst","OMES","Jaar","x","y",tolerance_larval$var)
+# 
+# # Data.larvaal_REF <-
+# #   {Data.larvaal_REF %>%
+# #   filter(afst > 50)}[1:1000,]
+# 
+# Data.larvaal_REF$SI_SPMref <- 
+#   Data.larvaal_REF %>% 
+#   calculate_SI_par(new_set_larval$new_tolerance, new_set_larval$new_rules, nodes = Nds)
+# 
+# Data.larvaal <- 
+#   Data.larvaal %>% 
+#   left_join(Data.larvaal_REF %>% 
+#               select(afst, OMES, Jaar, x, y, SPM_ref = SPM, SI_SPMref))
+
+
+cat("   wegschrijven resultaten \n")
+
+#### afronden ####
+Data.larvaal <-
+  Data.larvaal %>% 
+  mutate(across(starts_with("SI"), ~round(., 3)))
+
+
+#### wegschrijven ####
+Data.larvaal %>%
+  write_delim(str_c("../../Output/resultaten_fint_", Alternatief.scenario, "_larvaal.csv"),
+              delim = ";")
+
+```
+
+
+```{r berekenen geschiktheidsscore paai}
+
+cat("\n berekening paai \n")
+
+Data.adult <- 
+  Fint.data.1D %>% 
+  select(afstand_vlissingen, Omes, jaar, X, Y, 
+         temp_A_linear, oxygen_A_linear, salinity_A_linear, depth, avg_vel) %>% 
+  drop_na()
+names(Data.adult) <- 
+  c("afst","OMES","jaar","x","y",tolerance_adult$var)
+
+
+Vars <-
+  tolerance_adult %>% 
+  filter(!(var %in% c("temp", "SI_l"))) %>% # alle variabelen behalve temp en SI_l 
+  pull(var)
+
+
+cat("   berekening op alle variabelen \n")
+
+#### berekenen op alle variabelen ####
+new_set_adult <- 
+  select_variables(tolerance_adult, rules_adult, Vars)
+
+Data.adult$SI <- 
+  Data.adult %>% 
+  calculate_SI_par(new_set_adult$new_tolerance, new_set_adult$new_rules, nodes = Nds)
+
+
+cat("   berekening per variabele \n")
+
+#### berekenen per variabele ####
+for(vr in Vars) {
+  cat("     var = ", vr, "\n")
+  new_set <- 
+    select_variables(tolerance_adult, rules_adult, vr)
+  Data.adult[str_c("SI_", vr)] <-
+    Data.adult %>% 
+    calculate_SI_par(new_set$new_tolerance, new_set$new_rules, nodes = Nds)
+}
+
+
+cat("   wegschrijven resultaten \n")
+
+#### afronden ####
+Data.adult <-
+  Data.adult %>% 
+  mutate(across(starts_with("SI"), ~round(., 3)))
+
+
+#### wegschrijven ####
+Data.adult %>% 
+  write_delim(str_c("../../Output/resultaten_fint_", Alternatief.scenario,"_adult_1D.csv"),
+              delim = ";")
+
+```
+
+
