@@ -1,7 +1,7 @@
 ---
 title: "Fint Data C-alternatieven"
 author: "Joost Vanoverbeke, aangepast door Nicolas Vanermen"
-date: "22 juli 2021, aangepast 5/11/2026"
+date: "22 juli 2021, aangepast 10/11/2026"
 output: html_document
 ---
 
@@ -18,8 +18,11 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = FA
 library(tidyverse)
 library(magrittr)
 library(sf)
+library(diffobj)
 
 options(stringsAsFactors = FALSE) 
+
+diffFile("04.Fint_data_modeltrein_20261103.Rmd","04.Fint_data_modeltrein_20261110.Rmd")
 
 source("../../../../Basis/src/afstanden_updated.R")
 
@@ -29,7 +32,7 @@ source("../../../../Basis/src/afstanden_updated.R")
 ```{r alternatief en scenario}
 
 # alternatief <- "2050REF_C"
-Alternatief <- "c3"
+Alternatief <- "REF"
 # alternatief <- "2050C2"
 # alternatief <- "2050C3"
 
@@ -95,19 +98,20 @@ Data.dwarspunten <- Data.dwarspunten %>%
 
 ```{r retentie en ecosysteem data}
 
-Data.UA <- read_delim(paste0("../../Data/Data_processed/data_UA_", Alternatief.scenario, "_maand_IP_TEMP.csv"), delim = ";")
+Data.UA <- read_delim(paste0("../../Data/Data_processed/data_UA_", Alternatief.scenario, "_maand_IP_TEMP_update.csv"), delim = ";")
+summary(Data.UA)
 
 # problemen met de UA data voor mei 2048 voor box 1 tem 23:
-view(Data.UA %>% filter(ym(paste0(year, month)) == "2048/05/01") %>% select(box, ResidenceTime))
-
+# view(Data.UA %>% filter(ym(paste0(year, month)) == "2048/05/01") %>% select(box, ResidenceTime))
 Data.UA.agg <- 
   Data.UA %>%  
   rename(jaar = year, 
 				 maand = month,
-				 afstand_grens = AfstGrensCentroid) %>%
+				 segment = Naam,
+				 afstand_monding = AfstMondingCentroide) %>%
   # problemen met de UA data voor mei 2048 voor box 1 tem 23, daarom onderstaande filter:
   filter(ym(paste0(jaar, maand)) != "2048/05/01") %>% 
-	group_by(box, afstand_grens, OMES, SalZone, KRWzone, jaar) %>% 
+	group_by(box, segment, afstand_monding, OMES, SalZone, KRWzone, jaar) %>% 
 	summarise(salinity_A = mean(Salinity[maand %in% c(5)], na.rm=TRUE),
 						salinity = mean(Salinity[maand %in% c(5,6)], na.rm=TRUE),
 						temp_A = mean(Temperatuur[maand %in% c(5)], na.rm=TRUE),
@@ -118,16 +122,12 @@ Data.UA.agg <-
 						zoo_C = mean(ZooC[maand %in% c(5,6)], na.rm=TRUE)*12.0107,# Moleculair gewicht C  : 12.0107 g/mol
 						retentie = mean(Retentie[maand == 5], na.rm=TRUE), # dag/km
 						verplaatsing = mean(Verplaatsing[maand == 5], na.rm=TRUE)) %>% # km/dag
-  mutate(afstand_vlissingen = afstand_grens + Afst.vlissingen.grens.num) %>% 
-	ungroup() %>% 
-	# mutate_all(funs(na_if(., -Inf))) %>% 
-	# mutate_all(funs(na_if(., Inf))) %>% 
-	arrange(afstand_grens, jaar)
-
+  ungroup()
+	
 summary(Data.UA.agg)
-sum(is.na(Data.UA.agg))
-# geen NA's dus bovenstaande lijnen met "funs(na_if..." zijn (voorlopig) overbodig 
-# (geven ook een foutmelding mbt de character-kolommen)
+# nu zijn er missende waarden (telkens 64) voor de maand mei in het jaar 2048 voor die parameters die enkel de maand mei beschouwen
+# probleem? valt nog te bezien...
+# VANAF HIER VERDER WERKEN (16/11)
 
 ```
 
@@ -246,11 +246,11 @@ for (v in 1:length(vrs)) {
 ```{r wegschrijven data}
 
 write_delim(Data.UA.dwarspunten, 
-            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, ".csv"), 
+            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_update.csv"), 
             delim = ";")
 
 write_delim(Data.UA.dwarspunten.1D, 
-            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D.csv"), 
+            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D_update.csv"), 
             delim = ";")
 
 ```
