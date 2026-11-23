@@ -1,7 +1,7 @@
 ---
 title: "Fint Data C-alternatieven"
-author: "Joost Vanoverbeke, aangepast door Nicolas Vanermen"
-date: "22 juli 2021, aangepast 10/11/2026"
+author: "Joost Vanoverbeke, edited by Nicolas Vanermen"
+date: "Edited 23/11/2026"
 output: html_document
 ---
 
@@ -22,23 +22,15 @@ library(diffobj)
 
 options(stringsAsFactors = FALSE) 
 
-diffFile("04.Fint_data_modeltrein_20261103.Rmd","04.Fint_data_modeltrein_20261110.Rmd")
-
-source("../../../../Basis/src/afstanden_updated.R")
+source("../../../../../Basis/src/afstanden_updated.R")
 
 ```
 
 
 ```{r alternatief en scenario}
 
-# alternatief <- "2050REF_C"
-Alternatief <- "REF"
-# alternatief <- "2050C2"
-# alternatief <- "2050C3"
-
+Alternatief <- "C3"
 Scenario <- "A0CN"
-# scenario <- "AminCL"
-# scenario <- "AplusCH"
 
 Alternatief.scenario <- str_c(Alternatief, Scenario, sep = "_")
 
@@ -68,8 +60,9 @@ table(Data.dwarspunten$Omes)
 Data.dwarspunten <- Data.dwarspunten %>%
   filter(!is.na(diepte),
          diepte > 0,
-         Omes %in% c(9:19, "TijarmZw", "19 trGM")) %>% 
-  mutate(afstand_vlissingen = case_when(Omes %in% c("TijarmZw", "19 trGM") ~ AfstMonding + 165.3, 
+         # de bedoeling is om hier ook nog de Rupel bij te betrekken
+         Omes %in% c(9:19, "Ringvaart", "TijarmZw")) %>% 
+  mutate(afstand_vlissingen = case_when(Omes %in% c("Ringvaart", "TijarmZw") ~ AfstMonding + 165.3, 
                                        .default = AfstMonding)) %>% 
   # er sukkelden nog enkele punten in stroomopwaarts van zijriviermondingen, 
   # met kleine afstand tot de monding, vandaar de volgende filter
@@ -98,20 +91,18 @@ Data.dwarspunten <- Data.dwarspunten %>%
 
 ```{r retentie en ecosysteem data}
 
-Data.UA <- read_delim(paste0("../../Data/Data_processed/data_UA_", Alternatief.scenario, "_maand_IP_TEMP_update.csv"), delim = ";")
+Data.UA <- read_delim(paste0("../../../Data/Data_processed/data_UA_", Alternatief.scenario, "_maand_IP_TEMP.csv"), delim = ";")
 summary(Data.UA)
 
-# problemen met de UA data voor mei 2048 voor box 1 tem 23:
-# view(Data.UA %>% filter(ym(paste0(year, month)) == "2048/05/01") %>% select(box, ResidenceTime))
+# problemen met de UA data voor mei 2048 voor box 1 tem 23 voor residence time en retentie:
+view(Data.UA %>% filter(ym(paste0(year, month)) == "2048/05/01"))
 Data.UA.agg <- 
   Data.UA %>%  
   rename(jaar = year, 
 				 maand = month,
 				 segment = Naam,
 				 afstand_monding = AfstMondingCentroide) %>%
-  # problemen met de UA data voor mei 2048 voor box 1 tem 23, daarom onderstaande filter:
-  filter(ym(paste0(jaar, maand)) != "2048/05/01") %>% 
-	group_by(box, segment, afstand_monding, OMES, SalZone, KRWzone, jaar) %>% 
+  group_by(box, segment, afstand_monding, OMES, SalZone, KRWzone, jaar) %>% 
 	summarise(salinity_A = mean(Salinity[maand %in% c(5)], na.rm=TRUE),
 						salinity = mean(Salinity[maand %in% c(5,6)], na.rm=TRUE),
 						temp_A = mean(Temperatuur[maand %in% c(5)], na.rm=TRUE),
@@ -122,12 +113,13 @@ Data.UA.agg <-
 						zoo_C = mean(ZooC[maand %in% c(5,6)], na.rm=TRUE)*12.0107,# Moleculair gewicht C  : 12.0107 g/mol
 						retentie = mean(Retentie[maand == 5], na.rm=TRUE), # dag/km
 						verplaatsing = mean(Verplaatsing[maand == 5], na.rm=TRUE)) %>% # km/dag
+  mutate(afstand_vlissingen = case_when(OMES %in% c("TijarmZw", "Ringvaart") ~ afstand_monding + 165.3, 
+                                       .default = afstand_monding)) %>% 
   ungroup()
 	
 summary(Data.UA.agg)
-# nu zijn er missende waarden (telkens 64) voor de maand mei in het jaar 2048 voor die parameters die enkel de maand mei beschouwen
-# probleem? valt nog te bezien...
-# VANAF HIER VERDER WERKEN (16/11)
+Data.UA.agg %>% filter(retentie %in% c(Inf, -Inf)) %>% nrow()
+# retentie -Inf & Inf in 31 rijen
 
 ```
 
@@ -135,12 +127,11 @@ summary(Data.UA.agg)
 ```{r interpolatie retentie en ecosysteem data}
 
 ##### lineare interpolatie UA data
-### !! opgelet, deze werkwijze zal niet voldoen indien Rupel & Durme worden 'aangetakt' in de analyse
+### !! opgelet, deze werkwijze zal niet voldoen indien de Rupel wordt 'aangetakt' in de analyse !!
 int.O <- NULL
 for(j in unique(Data.UA.agg$jaar)) {
     S <- subset(Data.UA.agg, jaar==j) 
-    D <- 
-      data.frame(jaar = j, afstand_vlissingen = unique(Data.dwarspunten$afstand_vlissingen)) 
+    D <- data.frame(jaar = j, afstand_vlissingen = unique(Data.dwarspunten$afstand_vlissingen)) 
     for(v in c("salinity_A","salinity","oxygen_A","oxygen","temp_A","temp","spm_surface","zoo_C", "retentie", "verplaatsing")) {
       if(any(!is.na(S[,v]))) {
         lin <- approx(x=S$afstand_vlissingen, y=pull(S,v), xout=D$afstand_vlissingen)
@@ -158,12 +149,16 @@ rm(D, S, lin)
 int.O$spm_depth_avg_linear <-  int.O$spm_surface_linear*(4.1-0.02*int.O$afstand_vlissingen)
 
 summary(int.O)
+
 int.O %>% filter(is.na(salinity_A_linear)) %>% distinct(afstand_vlissingen) %>% pull()
-# ter hoogte van OMES 9 (in vorige script uitgefilterd via filter(AfstGrensCentroid > 0)) & tijarm Zwijnaarde (max afstand aslijn > data UA)
+# tijarm Zwijnaarde (max afstand aslijn > data UA)
 
-int.O <- int.O %>% drop_na(salinity_A_linear )
+int.O <- int.O %>% drop_na(salinity_A_linear)
 summary(int.O)
-
+sum(is.na(int.O))
+# enkel nog 385 NA-waarden voor retentie-lineair -> uitzoeken!
+int.O %>% filter(retentie_linear %in% c(Inf, -Inf)) %>% nrow()
+# 198 rijen met Inf
 ```
 
 
@@ -176,7 +171,7 @@ Data.UA.dwarspunten <- merge(Data.dwarspunten[c("SalZone","Omes","afstand_vlissi
   mutate(across(where(is.numeric), ~ if_else(is.na(.x), NaN, .x)))
 
 summary(Data.UA.dwarspunten)
-# 303580 records; 3653 NA-waarden voor retentie_linear
+# 336375 records; 4315 NA-waarden voor retentie_linear
 
 ```
 
@@ -246,11 +241,11 @@ for (v in 1:length(vrs)) {
 ```{r wegschrijven data}
 
 write_delim(Data.UA.dwarspunten, 
-            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_update.csv"), 
+            str_c("../../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, ".csv"), 
             delim = ";")
 
 write_delim(Data.UA.dwarspunten.1D, 
-            str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D_update.csv"), 
+            str_c("../../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D.csv"), 
             delim = ";")
 
 ```

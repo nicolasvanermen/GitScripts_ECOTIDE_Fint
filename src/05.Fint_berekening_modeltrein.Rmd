@@ -1,7 +1,7 @@
 ---
 title: "Fint berekening SI C-alternatieven"
-author: "Joost Vanoverbeke"
-date: "22 juli 2021"
+author: "Joost Vanoverbeke, edited by Nicolas Vanermen"
+date: "Edited 23/11/2026"
 output: html_document
 ---
 
@@ -13,8 +13,8 @@ library(parallel)
 
 options(stringsAsFactors = FALSE) 
 
-source("../../../../../R_functies/hulpfuncties_sort.R")
-source("../../../Basis/Fuzzy_logic/Fuzzy_logic.R")
+source("../../../../../../R_functies/hulpfuncties_sort.R")
+source("../../../../Basis/Fuzzy_logic/Fuzzy_logic.R")
 
 ```
 
@@ -24,7 +24,7 @@ source("../../../Basis/Fuzzy_logic/Fuzzy_logic.R")
 # Referentie <- "REF"
 
 # alternatief <- "2050REF_C"
-Alternatief <- "C3"
+Alternatief <- "REF"
 # alternatief <- "2050C2"
 # alternatief <- "2050C3"
 
@@ -48,10 +48,10 @@ Nds <- 2
 ```{r ophalen gegevens}
 
 Fint.data <- 
-  read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, ".csv"), delim = ";")
+  read_delim(str_c("../../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, ".csv"), delim = ";")
 
 Fint.data.1D <- 
-  read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D.csv"), delim = ";")
+  read_delim(str_c("../../../Data/Data_processed/data_dwarspunten_UA_", Alternatief.scenario, "_1D.csv"), delim = ";")
 
 # Fint.data.REF <-
 #   read_delim(str_c("../../Data/Data_processed/data_dwarspunten_UA_", Referentie.scenario, ".csv"), delim = ";")
@@ -147,7 +147,7 @@ Data.larvaal <-
 
 #### wegschrijven ####
 Data.larvaal %>%
-  write_delim(str_c("../../Output/resultaten_fint_", Alternatief.scenario, "_larvaal.csv"),
+  write_delim(str_c("../../../Output/resultaten_fint_", Alternatief.scenario, "_larvaal.csv"),
               delim = ";")
 
 ```
@@ -206,7 +206,7 @@ Data.adult <-
 
 #### wegschrijven ####
 Data.adult %>% 
-  write_delim(str_c("../../Output/resultaten_fint_", Alternatief.scenario,"_adult_1D.csv"),
+  write_delim(str_c("../../../Output/resultaten_fint_", Alternatief.scenario,"_adult_1D.csv"),
               delim = ";")
 
 ```
