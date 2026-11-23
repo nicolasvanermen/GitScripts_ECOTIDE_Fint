@@ -8,27 +8,23 @@ library(diffobj)
 
 options(stringsAsFactors = FALSE)
 
-# diffFile("03.fetchdata_UA_20261103.R","03.fetchdata_UA_20261110.R")
-
-########  alternatief en scenario ######## 
+#### alternatief & scenario ####  
 
 Alternatieven.UA <- c("REF", "C1", "C3")
-# Alternatieven.UA <- "REF"
 Scenario <- "A0CN"
 
-########  start loop ######## 
+######## START LOOP ######## 
 for (i in 1:length(Alternatieven.UA)) {
 
 Alternatief.UA <- Alternatieven.UA[i]
-# Alternatief.UA <- Alternatieven.UA
-   
+
 #### input & output ####
 Name.in <- str_c("INBO_out", Alternatief.UA, Scenario, "diffuse_IP_TEMP.csv", sep = "_")
-Data.in <- str_c("../../Data/Data_UA/", Name.in)
-GDB.path <- "../../../Basis/Boxes.gdb"
+Data.in <- str_c("../../../Data/Data_UA/", Name.in)
+GDB.path <- "../../../../Basis/Boxes.gdb"
 
-# data_out <- str_c("../../Data/Data_processed/", "data_UA_", alternatief_UA, "_", scenario, "_IP_TEMP.csv")
-Data.out <- str_c("../../Data/Data_processed/", "data_UA_", Alternatief.UA, "_", Scenario, "_maand_IP_TEMP_update.csv")
+# data_out <- str_c("../../../Data/Data_processed/", "data_UA_", alternatief_UA, "_", scenario, "_IP_TEMP.csv")
+Data.out <- str_c("../../../Data/Data_processed/", "data_UA_", Alternatief.UA, "_", Scenario, "_maand_IP_TEMP.csv")
 
 
 #### ophalen data ####
@@ -73,7 +69,8 @@ Data.UA <- Data.UA %>%
 # 118690 records
 
 #### grafiekjes ####
-Data.UA %>%
+print(
+  Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -81,8 +78,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_continuous(limits = c(-1,30)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -90,8 +88,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_log10(limits =c(0.03,1.5)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -99,8 +98,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_continuous(limits = c(10,21)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -108,8 +108,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_continuous(limits = c(0,300)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -117,8 +118,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_continuous(limits = c(0,0.2)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -126,8 +128,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_continuous(limits = c(0,200)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(month == 5,
          box %in% c(1,21,41,51,61,75)) %>%
@@ -135,8 +138,9 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   scale_y_log10(limits = c(0.05,200)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
-Data.UA %>%
+print(Data.UA %>%
   mutate(date = ymd(date)) %>%
   filter(box %in% c(1,21,41,51,61,75),
          # box %in% c(1,6,11,16,21,26,28,29,30),
@@ -145,6 +149,7 @@ Data.UA %>%
   geom_line(aes(color = ordered(year))) +
   # scale_y_continuous(limits = c(0,15)) +
   facet_wrap(~box, labeller = "label_both")
+)
 
 
 #### data per maand, vanaf grens BE-NL ####
@@ -154,7 +159,8 @@ Data.UA.maand <- Data.UA %>%
     DIN = NH4 + NO3,
     Verplaatsing_std = 1/ResidenceTime) %>%
   group_by(box, X, Y, AfstMondingCentroide, AfstMondingBovengrens, year, month) %>%
-  summarise(across(c(Temp, Sal, O2, Chla, TOC, PhytoC, DiatC, DetC, DIN, Sed, ZooC, ResidenceTime, Verplaatsing_std), ~ mean(., na.rm = TRUE))) %>%
+  summarise(across(c(Temp, Sal, O2, Chla, TOC, PhytoC, DiatC, DetC, DIN, Sed, ZooC, ResidenceTime, Verplaatsing_std), 
+                   ~ mean(., na.rm = TRUE))) %>%
   ungroup() %>%
   rename(Temperatuur = Temp,
          Salinity = Sal,
@@ -172,15 +178,18 @@ Data.UA.maand <- Data.UA %>%
 # 3840 records
 
 # 2 grafiekjes:
-ggplot(Data.UA.maand,
+print(
+  ggplot(Data.UA.maand,
        aes(box, Temperatuur, color = factor(year))) +
   geom_line() +
   facet_wrap(~ month, labeller = "label_both")
+)
 
-ggplot(Data.UA.maand,
+print(ggplot(Data.UA.maand,
        aes(box, Temperatuur, color = factor(month))) +
   geom_line() +
   facet_wrap(~ year)
+)
 
 #### koppeling met KRW/OMES ####
 Path.shape <- file.path("Q:/Projects/PRJ_Schelde/GIS_Zeeschelde/Referentiedata/gebiedsindelingen",

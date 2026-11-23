@@ -1,7 +1,7 @@
 ---
 title: "Fint figuren C-alternatieven"
-author: "Joost Vanoverbeke"
-date: "22 juli 2021"
+author: "Joost Vanoverbeke, edited by Nicolas Vanermen"
+date: "Edited 23/11/2026"
 output:
   html_document: default
   word_document:
@@ -30,7 +30,7 @@ conflicted::conflicts_prefer(dplyr::filter)
 
 options(stringsAsFactors = FALSE)
 
-source("../../../../Basis/src/afstanden_updated.R")
+source("../../../../../Basis/src/afstanden_updated.R")
 
 ```
 
@@ -64,7 +64,7 @@ Scenarios <-
 
 ```{r locaties}
 
-figuren <- "../../Output/figuren/"
+figuren <- "../../../Output/figuren/"
 figuren_larvaal <- str_c(figuren, "larvaal/")
 figuren_larvaal_SI <- str_c(figuren_larvaal, "SI/")
 figuren_larvaal_delta_SI <- str_c(figuren_larvaal, "delta_SI/")
@@ -83,7 +83,7 @@ for(scen in Scenarios) {
     cat(str_c("scenario = ", scen, ";  alternatief = ", alt, "\nl"))
     # ng <- ifelse(alt == "2050REF_C", "", nevengeul)
     file_name <- 
-      str_c("../../Output/resultaten_fint_", alt, "_", scen, "_larvaal.csv")
+      str_c("../../../Output/resultaten_fint_", alt, "_", scen, "_larvaal.csv")
     Data_larvaal <-
       Data_larvaal %>% 
       bind_rows(read_delim(file_name, 
@@ -119,7 +119,7 @@ for(scen in Scenarios) {
     cat(str_c("scenario = ", scen, ";  alternatief = ", alt, "\nl"))
     # ng <- ifelse(alt == "2050REF_C", "", nevengeul)
     file_name <-
-      str_c("../../Output/resultaten_fint_", alt, "_", scen, "_adult_1D.csv")
+      str_c("../../../Output/resultaten_fint_", alt, "_", scen, "_adult_1D.csv")
     Data_adult <-
       Data_adult %>% 
       bind_rows(read_delim(file_name, 
@@ -1277,13 +1277,13 @@ for (sc in Scenarios) {
 Data_larvaal_SI_gem %>% 
   filter(Type_Score == "All") %>% 
   arrange(scenario, alternative, afst) %>% 
-  write_delim(paste0("../../Output/tabellen/fint_larvaal_SI.csv"), delim = ";")
+  write_delim(paste0("../../../Output/tabellen/fint_larvaal_SI.csv"), delim = ";")
 
 
 Data_adult_SI_gem %>% 
   filter(Type_Score == "All") %>% 
   arrange(scenario, alternative, afst) %>% 
-  write_delim(paste0("../../Output/tabellen/fint_adult_SI.csv"), delim = ";")
+  write_delim(paste0("../../../Output/tabellen/fint_adult_SI.csv"), delim = ";")
 
 ```
 
@@ -1293,13 +1293,13 @@ Data_adult_SI_gem %>%
 Data_larvaal_verschil_gem %>%
   filter(Type_Score == "All") %>%
   arrange(scenario, alternative, afst) %>%
-  write_delim(paste0("../../Output/tabellen/fint_larvaal_delta_SI.csv"), delim = ";")
+  write_delim(paste0("../../../Output/tabellen/fint_larvaal_delta_SI.csv"), delim = ";")
 
 
 Data_adult_verschil_gem %>%
   filter(Type_Score == "All") %>%
   arrange(scenario, alternative, afst) %>%
-  write_delim(paste0("../../Output/tabellen/fint_adult_delta_SI.csv"), delim = ";")
+  write_delim(paste0("../../../Output/tabellen/fint_adult_delta_SI.csv"), delim = ";")
 
 ```
 
